@@ -3,12 +3,13 @@
         Jay Lago, NIWC/SDSU, 2021
 """
 import tensorflow as tf
+import numpy as np
 import pickle
 import datetime as dt
 import os
 import sys
 sys.path.insert(0, '../../')
-import DLDMD as dl
+import DLDMD_TRY_CNN as dl
 import LossDLDMD as lf
 import Data as dat
 import Training as tr
@@ -37,7 +38,11 @@ print("Num GPUs available: {}".format(len(GPUS)))
 print("Training at precision: {}".format(tf.keras.backend.floatx()))
 print("Training on device: {}".format(DEVICE))
 
-
+# ==============================================================================
+# 638 Project Params
+# ==============================================================================
+gaussian_scale = 0.0254374995
+num_epoch = 100
 # ==============================================================================
 # Initialize hyper-parameters and Koopman model
 # ==============================================================================
@@ -45,14 +50,14 @@ print("Training on device: {}".format(DEVICE))
 hyp_params = dict()
 hyp_params['sim_start'] = dt.datetime.now().strftime("%Y-%m-%d-%H%M")
 hyp_params['experiment'] = 'duffing'
-hyp_params['plot_path'] = './training_results/' + hyp_params['experiment'] + '_' + hyp_params['sim_start']
-hyp_params['model_path'] = './trained_models/' + hyp_params['experiment'] + '_' + hyp_params['sim_start']
+hyp_params['plot_path'] = './training_results/' + hyp_params['experiment'] + 'TRY_CON_' + hyp_params['sim_start'] + '_' + str(np.log10(gaussian_scale)) + '_noise_scale'
+hyp_params['model_path'] = './trained_models/' + hyp_params['experiment'] + 'TRY_CON_' + hyp_params['sim_start'] + '_' + str(np.log10(gaussian_scale)) + '_noise_scale'
 hyp_params['device'] = DEVICE
 hyp_params['precision'] = tf.keras.backend.floatx()
-hyp_params['num_init_conds'] = 15000
-hyp_params['num_train_init_conds'] = 10000
-hyp_params['num_val_init_conds'] = 3000
-hyp_params['num_test_init_conds'] = 2000
+hyp_params['num_init_conds'] = 1500
+hyp_params['num_train_init_conds'] = 1000
+hyp_params['num_val_init_conds'] = 300
+hyp_params['num_test_init_conds'] = 200
 hyp_params['time_final'] = 20
 hyp_params['delta_t'] = 0.05
 hyp_params['num_time_steps'] = int(hyp_params['time_final']/hyp_params['delta_t'] + 1)
@@ -86,22 +91,23 @@ hyp_params['a4'] = tf.constant(1e-14, dtype=hyp_params['precision'])    # L-2 on
 hyp_params['lr'] = 1e-3
 
 # Initialize the Koopman model and loss
-myMachine = dl.DLDMD(hyp_params)
+myMachine = dl.DLDMD_TRY_CNN(hyp_params)
 myLoss = lf.LossDLDMD(hyp_params)
 
 # ==============================================================================
 # Generate / load data
 # ==============================================================================
 data_fname = 'duffing_data.pkl'
-if os.path.exists(data_fname):
+if False:#os.path.exists(data_fname):
     # Load data from file
     data = pickle.load(open(data_fname, 'rb'))
     data = tf.cast(data, dtype=hyp_params['precision'])
 else:
-    # Create new data
+    # Create new datad
     data = dat.data_maker_duffing(x_lower1=-1, x_upper1=1, x_lower2=-1, x_upper2=1,
                                   n_ic=hyp_params['num_init_conds'], dt=hyp_params['delta_t'],
                                   tf=hyp_params['time_final'])
+    data += np.random.normal(loc=0, scale=gaussian_scale, size=data.shape)
     data = tf.cast(data[:, :, :2], dtype=hyp_params['precision'])
     # Save data to file
     pickle.dump(data, open(data_fname, 'wb'))

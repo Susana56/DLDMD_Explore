@@ -2,26 +2,69 @@
     Author:
         Jay Lago, NIWC/SDSU, 2021
 """
+from matplotlib import projections
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib
 import numpy as np
+from scipy import fft as ft
 
 font = {'family': 'DejaVu Sans', 'size': 18}
 matplotlib.rc('font', **font)
 
 
-def diagnostic_plot(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss):
+def diagnostic_plot(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss, noise_mag):
     if hyp_params['experiment'] == 'pendulum':
-        plot_2D(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss)
+        plot_2D(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss, noise_mag)
     elif hyp_params['experiment'] == 'duffing' or \
             hyp_params['experiment'] == 'van_der_pol':
-        plot_3d_latent(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss)
+        plot_3d_latent(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss, noise_mag)
+    elif hyp_params['experiment'] in {'Rossler', 'lorenz', 'lorenz63'}:
+        plot_full_3d(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss, noise_mag)
     else:
         print("[ERROR] unknown experiment, create new diagnostic plots...")
+    frequency_plots(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss, noise_mag)
+
+def frequency_plots(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss, noise_mag):
+    skip = 20
+    enc = y_pred[0].numpy()[::skip]
+    enc_dec = y_pred[1]
+    enc_adv_dec = y_pred[2]
+    enc_adv = y_pred[3]
 
 
-def plot_2D(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss):
+    times = np.arange(0, hyp_params['time_final'], hyp_params['delta_t'])
+
+    fig, axes = plt.subplots(hyp_params['latent_dim'], 2, sharex='col', figsize=(10, hyp_params['latent_dim']*10/3))
+    #st = fig.suptitle(f"Epoch: {epoch}/{hyp_params['max_epochs']}, Noise Mag: {noise_mag:.3f}")
+
+    enc_hat = ft.rfft(enc, axis=1)
+    enc_freqs = ft.rfftfreq(enc.shape[1], d=times[1] - times[0])
+
+    axes[-1,0].set_xlabel("$t$", size=15)
+    axes[-1,-1].set_xlabel("$\\xi$", size=15)
+
+    axes[0,0].set_title(f"Lifted dimension components, {epoch}/{hyp_params['max_epochs']}", size=15)
+    axes[0,1].set_title(f"Noise Mag: {noise_mag}, Lifted dimension FTs", size=15)
+
+    for ii, (ax, dim) in enumerate(zip(axes[:,0], np.transpose(enc, axes=[2,1,0]))):
+        ax.plot(times, dim)
+        ax.set_ylabel(f"$\\widetilde{{y}}_{ii+1}$")
+        ax.set_xlim(*times[[0,-1]])
+        ax.grid(True)
+
+    for ii, (ax, dim_hat) in enumerate(zip(axes[:,1], np.transpose(enc_hat, axes=[2,1,0]))):
+        ax.plot(enc_freqs, np.abs(dim_hat))
+        ax.set_xlim(0, enc_freqs[-1]/5)
+        ax.set_ylabel(f"$\\widehat{{\\widetilde{{y}}}}_{ii+1}$")
+        ax.grid(True)
+
+    this_plot = save_path[:-4]
+    fig.tight_layout()
+    fig.savefig(f"{this_plot}_freq.png", dpi=100)
+    plt.close(fig)
+
+def plot_2D(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss, noise_mag):
     enc = y_pred[0]
     enc_dec = y_pred[1]
     enc_adv_dec = y_pred[2]
@@ -29,7 +72,7 @@ def plot_2D(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss):
 
     fig, ax = plt.subplots(nrows=3, ncols=3, sharex=False, sharey=False, figsize=(40, 20))
     ax = ax.flat
-    skip = 16
+    skip = 5
 
     # Validation batch
     for ii in np.arange(0, y_true.shape[0], skip):
@@ -110,17 +153,19 @@ def plot_2D(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss):
     ax[8].legend(loc="upper right")
 
     fig.suptitle(
-        "Epoch: {cur_epoch}/{max_epoch}, Learn Rate: {lr:.5f}, Val. Loss: {loss:.3f}".format(
+        "Epoch: {cur_epoch}/{max_epoch}, Learn Rate: {lr:.5f}, Val. Loss: {loss:.3f}, Noise Mag: {mag:.3f}".format(
             cur_epoch=epoch,
             max_epoch=hyp_params['max_epochs'],
             lr=hyp_params['lr'],
-            loss=val_loss[-1]))
+            loss=val_loss[-1],
+            mag=noise_mag))
 
+    fig.tight_layout()
     plt.savefig(save_path)
     plt.close()
 
 
-def plot_3d_latent(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss):
+def plot_3d_latent(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss, noise_mag):
     enc = y_pred[0]
     enc_dec = y_pred[1]
     enc_adv_dec = y_pred[2]
@@ -129,7 +174,7 @@ def plot_3d_latent(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val
     font = {'family': 'DejaVu Sans', 'size': 10}
     matplotlib.rc('font', **font)
 
-    skip = 8
+    skip = 3
     fig = plt.figure(figsize=(40, 20))
 
     # Validation batch
@@ -141,6 +186,7 @@ def plot_3d_latent(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val
         ax.plot(x1, x2)
     ax.set_xlabel("$x_{1}$")
     ax.set_ylabel("$x_{2}$")
+    ax.grid()
     ax.set_title("Validation Data (x)")
 
     # Encoded-advanced-decoded time series
@@ -152,6 +198,7 @@ def plot_3d_latent(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val
         ax.plot(x1, x2)
     ax.set_xlabel("$x_{1}$")
     ax.set_ylabel("$x_{2}$")
+    ax.grid()
     ax.set_title("Encoded-Advanced-Decoded (x_adv))")
 
     # Encoded time series
@@ -165,6 +212,7 @@ def plot_3d_latent(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val
     ax.set_xlabel("$y_{1}$")
     ax.set_ylabel("$y_{2}$")
     ax.set_zlabel("$y_{3}$")
+    # ax.grid()
     ax.set_title("Encoded (y)")
 
     # Encoded-decoded time series
@@ -176,6 +224,7 @@ def plot_3d_latent(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val
         ax.plot(x1, x2)
     ax.set_xlabel("$x_{1}$")
     ax.set_ylabel("$x_{2}$")
+    ax.grid()
     ax.set_title("Encoded-Decoded (x_ae)")
 
     # Encoded-advanced time series
@@ -227,11 +276,133 @@ def plot_3d_latent(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val
     ax.legend(loc="upper right")
 
     fig.suptitle(
-        "Epoch: {cur_epoch}/{max_epoch}, Learn Rate: {lr:.5f}, Val. Loss: {loss:.3f}".format(
-            cur_epoch=epoch,
-            max_epoch=hyp_params['max_epochs'],
-            lr=hyp_params['lr'],
-            loss=val_loss[-1]))
+        f"Epoch: {epoch}/{hyp_params['max_epochs']}, Learn Rate: {hyp_params['lr']:.5f}," +
+        f"Val. Loss: {val_loss[-1]:.3f}, Noise Mag: {noise_mag}", 
+        size=25)
+
+    fig.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
+
+def plot_full_3d(y_pred, y_true, hyp_params, epoch, save_path, loss_comps, val_loss, noise_mag):
+    enc = y_pred[0]
+    enc_dec = y_pred[1]
+    enc_adv_dec = y_pred[2]
+    enc_adv = y_pred[3]
+
+    font = {'family': 'DejaVu Sans', 'size': 10}
+    matplotlib.rc('font', **font)
+
+    skip = 3
+    fig = plt.figure(figsize=(40, 20))
+
+    # Validation batch
+    ax = fig.add_subplot(3, 3, 1, projection='3d')
+    for ii in np.arange(0, y_true.shape[0], skip):
+        ii = int(ii)
+        x1 = y_true[ii, :, 0]
+        x2 = y_true[ii, :, 1]
+        x3 = y_true[ii, :, 2]
+        ax.plot3D(x1, x2, x3)
+    ax.set_xlabel("$x_{1}$")
+    ax.set_ylabel("$x_{2}$")
+    ax.set_zlabel("$x_{3}$")
+    ax.set_title("Validation Data (x)")
+
+    # Encoded-advanced-decoded time series
+    ax = fig.add_subplot(3, 3, 2, projection='3d')
+    for ii in np.arange(0, enc_adv_dec.shape[0], skip):
+        ii = int(ii)
+        x1 = enc_adv_dec[ii, :, 0]
+        x2 = enc_adv_dec[ii, :, 1]
+        x3 = enc_adv_dec[ii, :, 2]
+        ax.plot3D(x1, x2, x3)
+    ax.set_xlabel("$x_{1}$")
+    ax.set_ylabel("$x_{2}$")
+    ax.set_zlabel("$x_{3}$")
+    ax.set_title("Encoded-Advanced-Decoded (x_adv))")
+
+    # Encoded time series
+    ax = fig.add_subplot(3, 3, 3, projection='3d')
+    for ii in np.arange(0, enc.shape[0], skip):
+        ii = int(ii)
+        x1 = enc[ii, :, 0]
+        x2 = enc[ii, :, 1]
+        x3 = enc[ii, :, 2]
+        ax.plot3D(x1, x2, x3)
+    ax.set_xlabel("$y_{1}$")
+    ax.set_ylabel("$y_{2}$")
+    ax.set_zlabel("$y_{3}$")
+    ax.set_title("Encoded (y)")
+
+    # Encoded-decoded time series
+    ax = fig.add_subplot(3, 3, 4, projection='3d')
+    for ii in np.arange(0, enc_dec.shape[0], skip):
+        ii = int(ii)
+        x1 = enc_dec[ii, :, 0]
+        x2 = enc_dec[ii, :, 1]
+        x3 = enc_dec[ii, :, 2]
+        ax.plot3D(x1, x2, x3)
+    ax.set_xlabel("$x_{1}$")
+    ax.set_ylabel("$x_{2}$")
+    ax.set_zlabel("$x_{3}$")
+    ax.grid()
+    ax.set_title("Encoded-Decoded (x_ae)")
+
+    # Encoded-advanced time series
+    ax = fig.add_subplot(3, 3, 5, projection='3d')
+    for ii in np.arange(0, enc_adv.shape[0], skip):
+        ii = int(ii)
+        x1 = enc_adv[ii, :, 0]
+        x2 = enc_adv[ii, :, 1]
+        x3 = enc_adv[ii, :, 2]
+        ax.plot3D(x1, x2, x3)
+    ax.set_xlabel("$y_{1}$")
+    ax.set_ylabel("$y_{2}$")
+    ax.set_zlabel("$y_{3}$")
+    ax.set_title("Encoded-Advanced (y_adv))")
+
+    # Loss components
+    lw = 3
+    loss_comps = np.asarray(loss_comps)
+    ax = fig.add_subplot(3, 3, 6)
+    ax.plot(val_loss, color='k', linewidth=lw, label='total')
+    ax.set_title("Total Loss")
+    ax.grid()
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("$log_{10}(L)$")
+    ax.legend(loc="upper right")
+
+    ax = fig.add_subplot(3, 3, 7)
+    ax.plot(loss_comps[:, 0], color='r', linewidth=lw, label='recon')
+    ax.set_title("Recon Loss")
+    ax.grid()
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("$log_{10}(L_{recon})$")
+    ax.legend(loc="upper right")
+
+    ax = fig.add_subplot(3, 3, 8)
+    ax.plot(loss_comps[:, 1], color='b', linewidth=lw, label='pred')
+    ax.set_title("Prediction Loss")
+    ax.grid()
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("$log_{10}(L_{pred})$")
+    ax.legend(loc="upper right")
+
+    ax = fig.add_subplot(3, 3, 9)
+    ax.plot(loss_comps[:, 2], color='g', linewidth=lw, label='dmd')
+    ax.set_title("DMD")
+    ax.grid()
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("$log_{10}(L_{dmd})$")
+    ax.legend(loc="upper right")
+
+    fig.suptitle(
+        f"Epoch: {epoch}/{hyp_params['max_epochs']}, Learn Rate: {hyp_params['lr']:.5f}," +
+        f"Val. Loss: {val_loss[-1]:.3f}, Noise Mag: {noise_mag}", 
+        size=25)
+
+    fig.tight_layout()
 
     plt.savefig(save_path)
     plt.close()

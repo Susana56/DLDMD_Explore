@@ -15,6 +15,7 @@ import LossDLDMD as lf
 import Training as tr
 
 
+
 # ==============================================================================
 # Setup
 # ==============================================================================
@@ -50,8 +51,8 @@ hyp_params['plot_path'] = './training_results/' + hyp_params['experiment'] + '_'
 hyp_params['model_path'] = './trained_models/' + hyp_params['experiment'] + '_' + hyp_params['sim_start']
 hyp_params['device'] = DEVICE
 hyp_params['precision'] = tf.keras.backend.floatx()
-hyp_params['num_init_conds'] = 15000
-hyp_params['num_train_init_conds'] = 10000
+hyp_params['num_init_conds'] = 1500          # take 0 out of the following 4
+hyp_params['num_train_init_conds'] = 1000
 hyp_params['num_val_init_conds'] = 3000
 hyp_params['num_test_init_conds'] = 2000
 hyp_params['time_final'] = 20
@@ -65,9 +66,9 @@ hyp_params['plot_every'] = hyp_params['max_epochs'] // NUM_PLOTS
 
 # Universal network layer parameters (AE & Aux)
 hyp_params['optimizer'] = 'adam'
-hyp_params['batch_size'] = 256
+hyp_params['batch_size'] = 256       # make smaller, try running + see error with memory
 hyp_params['phys_dim'] = 2
-hyp_params['latent_dim'] = 8
+hyp_params['latent_dim'] = 8         # dimension gets projected into
 hyp_params['hidden_activation'] = tf.keras.activations.relu
 hyp_params['bias_initializer'] = tf.keras.initializers.Zeros
 
