@@ -8,4 +8,5 @@ along with presentation slides:
 https://drive.google.com/file/d/1miaAqFOHJ4PpuPHIy08LFqo0sUagTKBR/view?usp=sharing
 
 Here is a summary of changes we made:
-1. 
+1. Changed the NN Layers in the Autoencoder/Decoder to be Convolutional layers instead of Dense Layers [ie . DLDMD_TRY_CNN.py]
+2. Since the above model was changed, needed to make small changes to references in the examples used + graphing functions [ie. Train_Duffing.py, Train_Rossler_With_CNN.py, .  ]
